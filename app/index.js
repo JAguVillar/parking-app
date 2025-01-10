@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View, ActivityIndicator, Button } from "react-native";
+import {
+  StyleSheet,
+  View,
+  ActivityIndicator,
+  Button,
+  Alert,
+} from "react-native";
 import MapView from "react-native-maps";
 import { Marker } from "react-native-maps";
 import { supabase } from "../lib/supabase";
 import { Link } from "expo-router";
-import Above from "../components/above";
 import Precio from "../components/marker";
 import THEMES from "../lib/mapThemes";
 import Enlace from "../components/enlace";
+import BotonRefresh from "../components/botonRefresh";
+import Above from "../components/above";
 
 export default function Index() {
   const [newPosition, setNewPosition] = useState({
@@ -16,16 +23,20 @@ export default function Index() {
   });
 
   const [cocheras, setCocheras] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState([]);
 
   useEffect(() => {
     fetchCocheras();
+    console.log("Parent loading state:", loading);
   }, []);
 
   const fetchCocheras = async () => {
+    setLoading(true);
     const { data, error } = await supabase.from("cocheras").select("*");
-    setCocheras(data);
+    if (data) {
+      setCocheras(data);
+    }
     setLoading(false);
   };
 
@@ -70,11 +81,9 @@ export default function Index() {
               );
             })}
           </MapView>
-
-          <Above handleClick={cambiarTema}></Above>
         </>
       )}
-      <Enlace></Enlace>
+      <BotonRefresh refresh={() => fetchCocheras()} loading={loading} />
     </View>
   );
 }

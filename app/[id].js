@@ -1,5 +1,6 @@
 import { useLocalSearchParams, Link, Stack } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFonts } from "expo-font";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,74 +8,129 @@ import {
   ActivityIndicator,
   Image,
   FlatList,
+  SafeAreaView,
+  StyleSheet,
+  RefreshControl,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-
-const Item = ({ title }) => (
-  <View>
-    <Text>{title}</Text>
-  </View>
-);
+import DetalleItem from "../components/detalleItem";
 
 export default function Detalle() {
   const [cocheraInfo, setCocheraInfo] = useState();
   const [imagenes, setImagenes] = useState();
+  const [horarios, setHorarios] = useState();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { id } = useLocalSearchParams();
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("cocheras")
+        .select(
+          `
+        *,
+        cocheras_imagenes(url),
+        cocheras_horarios(*)
+      `
+        )
+        .eq("id", id)
+        .single(); // Expect a single result based on the id
+
+      console.log(data);
+
+      const cochera = data;
+      const imagenes = data.cocheras_imagenes;
+      const horarios = data.cocheras_horarios[0]; // Assuming you want the first schedule
+
+      setCocheraInfo(cochera);
+      setImagenes(imagenes);
+      setHorarios(horarios);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Fetch cochera and images in parallel
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [cocheraResponse, imagenesResponse] = await Promise.all([
-          supabase.from("cocheras").select("*").eq("id", id).single(),
-          supabase.from("cocheras_imagenes").select("*").eq("cochera_id", id),
-        ]);
-        if (cocheraResponse.error || imagenesResponse.error) {
-          throw new Error(
-            cocheraResponse.error?.message || imagenesResponse.error?.message
-          );
-        }
-        setCocheraInfo(cocheraResponse.data);
-        setImagenes(imagenesResponse.data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-        console.log(cocheraInfo);
-      }
-    };
     fetchData();
   }, [id]); // Fetch when `id` changes
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+    setRefreshing(false);
+  }, []);
+
   return (
-    <ScrollView className="px-8 pt-8">
+    <View className="px-8 pt-8">
       {loading ? (
         <ActivityIndicator />
       ) : (
-        <View className="gap-8">
-          <View>
-            <Text className="text-6xl font-bold">{cocheraInfo.nombre}</Text>
+        <ScrollView
+          className="gap-8"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View className="py-4">
+            <Text style={{ fontFamily: "Satoshi" }} className="text-4xl">
+              {cocheraInfo.nombre}
+            </Text>
           </View>
-          <View>
-            <FontAwesome6 name="square-parking" size={24} color="black" />
+
+          <DetalleItem
+            detalle={cocheraInfo.direccion}
+            Icono={<FontAwesome5 name="parking" size={24} color="black" />}
+          />
+
+          <DetalleItem
+            detalle={`${horarios.dia} - Abierto de: ${horarios.hora_apertura} hasta ${horarios.hora_cierre}`}
+            Icono={<FontAwesome5 name="clock" size={24} color="black" />}
+          />
+          <DetalleItem
+            detalle={cocheraInfo.disponibilidad}
+            Icono={<FontAwesome5 name="car" size={24} color="black" />}
+          />
+          <DetalleItem
+            detalle={cocheraInfo.direccion}
+            Icono={<FontAwesome5 name="dollar-sign" size={24} color="black" />}
+          />
+
+          <View className="">
+            <FlatList
+              horizontal={true}
+              data={imagenes}
+              renderItem={({ item }) => (
+                <Image
+                  className="rounded-2xl"
+                  source={{ uri: item.url }}
+                  style={{ width: 150, height: 150 }}
+                />
+              )}
+              ItemSeparatorComponent={() => {
+                return <View className="h-full w-5" />;
+              }}
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+            />
+            {/* {imagenes.map((imagen, index) => {
+              return (
+                <Image
+                  source={{ uri: imagen.url }}
+                  style={{ width: 100, height: 100 }}
+                />
+              );
+            })} */}
           </View>
-          <View>
-            <FontAwesome5 name="clock" size={24} color="black" />
-          </View>
-          <View>
-            <FontAwesome5 name="car" size={24} color="black" />
-          </View>
-          <View>
-            <FontAwesome5 name="dollar-sign" size={24} color="black" />
-          </View>
-        </View>
+        </ScrollView>
       )}
-    </ScrollView>
+    </View>
   );
 }
